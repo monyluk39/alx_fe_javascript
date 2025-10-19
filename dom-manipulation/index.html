@@ -34,6 +34,9 @@
 </html>
 -->
 
+
+
+<!--
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -189,6 +192,375 @@
   </script>
 </body>
 </html>
+-->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dynamic Quote Generator — Web Storage + JSON Import/Export</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f6fa;
+      color: #2f3640;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #273c75;
+      color: white;
+      padding: 1rem;
+    }
+    #quote-display {
+      margin-top: 2rem;
+      font-size: 1.3rem;
+      min-height: 3.5rem;
+    }
+    #controls {
+      margin-top: 1.5rem;
+    }
+    button, input[type="file"] {
+      margin: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      background: #40739e;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover { background: #487eb0; }
+    form {
+      margin-top: 1.5rem;
+      background: #dcdde1;
+      padding: 1rem;
+      border-radius: 8px;
+      display: inline-block;
+    }
+    input[type="text"], select {
+      margin: 0.3rem;
+      padding: 0.4rem;
+    }
+    #message {
+      margin-top: 0.8rem;
+      min-height: 1.2rem;
+    }
+    .success { color: green; }
+    .error { color: crimson; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dynamic Quote Generator</h1>
+  </header>
+
+  <main>
+    <section id="quote-display">
+      <p id="quote-text">Click below to see a random quote!</p>
+      <p id="quote-category"></p>
+    </section>
+
+    <section id="controls">
+      <label for="category">Choose a category:</label>
+      <select id="category"></select>
+      <button id="show-quote">Show Random Quote</button>
+      <button id="add-quote">Add New Quote</button>
+      <button id="export-json">Export JSON</button>
+      <!-- import file input -->
+      <input type="file" id="importFile" accept=".json,application/json" />
+    </section>
+
+    <section id="form-section"></section>
+
+    <div id="message" aria-live="polite"></div>
+  </main>
+
+  <script>
+    /*************
+     * Storage keys
+     *************/
+    const LOCAL_KEY = 'dqg_quotes';
+    const SESSION_LAST = 'dqg_last_quote';
+
+    /*************
+     * Initial data
+     *************/
+    let quotes = [
+      { text: "The best way to get started is to quit talking and begin doing.", category: "Motivation" },
+      { text: "Life is what happens when you’re busy making other plans.", category: "Life" },
+      { text: "In the middle of every difficulty lies opportunity.", category: "Inspiration" }
+    ];
+
+    /*************
+     * DOM refs
+     *************/
+    const quoteText = document.getElementById("quote-text");
+    const quoteCategory = document.getElementById("quote-category");
+    const categorySelect = document.getElementById("category");
+    const formSection = document.getElementById("form-section");
+    const showQuoteBtn = document.getElementById("show-quote");
+    const addQuoteBtn = document.getElementById("add-quote");
+    const exportBtn = document.getElementById("export-json");
+    const importFileInput = document.getElementById("importFile");
+    const messageEl = document.getElementById("message");
+
+    /*************
+     * Helpers
+     *************/
+    function setMessage(msg, type = '') {
+      messageEl.textContent = msg;
+      messageEl.className = type;
+      if (!msg) messageEl.className = '';
+    }
+
+    function saveQuotes() {
+      try {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(quotes));
+      } catch (e) {
+        console.error('Failed to save to localStorage', e);
+        setMessage('Error: could not save quotes to localStorage.', 'error');
+      }
+    }
+
+    function loadQuotesFromStorage() {
+      try {
+        const raw = localStorage.getItem(LOCAL_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            // validate elements loosely
+            const valid = parsed.every(item => item && typeof item.text === 'string' && typeof item.category === 'string');
+            if (valid) {
+              quotes = parsed;
+            } else {
+              console.warn('localStorage data invalid shape — ignoring');
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not parse stored quotes, ignoring.', e);
+      }
+    }
+
+    function populateCategories() {
+      const cats = [...new Set(quotes.map(q => q.category))].sort();
+      categorySelect.innerHTML = "";
+      if (cats.length === 0) {
+        const o = document.createElement('option'); o.value = ''; o.textContent = '-- none --'; categorySelect.appendChild(o);
+        return;
+      }
+      cats.forEach(cat => {
+        const option = document.createElement("option");
+        option.value = cat;
+        option.textContent = cat;
+        categorySelect.appendChild(option);
+      });
+    }
+
+    function showRandomQuote() {
+      const selectedCategory = categorySelect.value;
+      const filtered = selectedCategory ? quotes.filter(q => q.category === selectedCategory) : quotes.slice();
+      if (filtered.length === 0) {
+        quoteText.textContent = "No quotes available for this category.";
+        quoteCategory.textContent = "";
+        sessionStorage.removeItem(SESSION_LAST);
+        setMessage('No quote found for the chosen category.', 'error');
+        return;
+      }
+      const random = filtered[Math.floor(Math.random() * filtered.length)];
+      // use textContent to avoid HTML injection
+      quoteText.textContent = `"${random.text}"`;
+      quoteCategory.textContent = `— Category: ${random.category}`;
+
+      // store last viewed quote in sessionStorage (for session-specific state)
+      try {
+        sessionStorage.setItem(SESSION_LAST, JSON.stringify(random));
+      } catch (e) {
+        console.warn('sessionStorage not available', e);
+      }
+
+      setMessage('Quote shown (last quote saved to session).', 'success');
+    }
+
+    function createAddQuoteForm() {
+      formSection.innerHTML = `
+        <form id="quote-form">
+          <div>
+            <input type="text" id="new-quote" placeholder="Enter your quote" required size="60">
+          </div>
+          <div>
+            <input type="text" id="new-category" placeholder="Enter category" required>
+          </div>
+          <div>
+            <button type="submit">Add Quote</button>
+            <button type="button" id="cancel-add">Cancel</button>
+          </div>
+        </form>
+      `;
+      const form = document.getElementById("quote-form");
+      const cancelBtn = document.getElementById("cancel-add");
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const newQuoteText = document.getElementById("new-quote").value.trim();
+        const newCategory = document.getElementById("new-category").value.trim();
+
+        if (!newQuoteText || !newCategory) {
+          setMessage('Please fill both quote and category.', 'error');
+          return;
+        }
+
+        // avoid exact-duplicate quotes (same text and category)
+        const exists = quotes.some(q => q.text === newQuoteText && q.category === newCategory);
+        if (exists) {
+          setMessage('This exact quote already exists.', 'error');
+          return;
+        }
+
+        quotes.push({ text: newQuoteText, category: newCategory });
+        saveQuotes();
+        populateCategories();
+        formSection.innerHTML = "<p class='success'>Quote added successfully!</p>";
+        setMessage('Quote saved to localStorage.', 'success');
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        formSection.innerHTML = '';
+        setMessage('');
+      });
+    }
+
+    /*******************
+     * JSON export/import
+     *******************/
+    function exportToJsonFile() {
+      try {
+        const data = JSON.stringify(quotes, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const now = new Date();
+        const stamp = now.toISOString().slice(0,19).replace(/[:T]/g,'-');
+        a.download = `quotes-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setMessage('Export started — check your downloads.', 'success');
+      } catch (e) {
+        console.error(e);
+        setMessage('Export failed.', 'error');
+      }
+    }
+
+    function importFromJsonFile(file) {
+      if (!file) {
+        setMessage('No file provided.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          if (!Array.isArray(parsed)) throw new Error('JSON must be an array of quotes');
+          // validate items and collect valid ones
+          const validItems = parsed.filter(item => item && typeof item.text === 'string' && typeof item.category === 'string')
+                                  .map(item => ({ text: item.text.trim(), category: item.category.trim() }))
+                                  .filter(item => item.text && item.category); // drop empties
+          if (validItems.length === 0) {
+            setMessage('Imported file contains no valid quote objects.', 'error');
+            return;
+          }
+          // Merge but avoid exact duplicates
+          let added = 0;
+          validItems.forEach(it => {
+            const exists = quotes.some(q => q.text === it.text && q.category === it.category);
+            if (!exists) { quotes.push(it); added++; }
+          });
+          if (added > 0) {
+            saveQuotes();
+            populateCategories();
+            setMessage(`Imported ${added} new quotes.`, 'success');
+          } else {
+            setMessage('No new quotes were imported (all duplicates).', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          setMessage('Failed to parse JSON file: ' + (err.message || ''), 'error');
+        } finally {
+          // reset file input so same file can be chosen again if needed
+          importFileInput.value = '';
+        }
+      };
+      reader.onerror = (err) => {
+        console.error('File read error', err);
+        setMessage('Could not read file.', 'error');
+        importFileInput.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    /*************
+     * Initialization
+     *************/
+    function init() {
+      // load existing quotes from localStorage if present
+      loadQuotesFromStorage();
+
+      // populate UI
+      populateCategories();
+
+      // If session stored last quote exists, show it
+      try {
+        const lastRaw = sessionStorage.getItem(SESSION_LAST);
+        if (lastRaw) {
+          const last = JSON.parse(lastRaw);
+          if (last && typeof last.text === 'string') {
+            quoteText.textContent = `"${last.text}"`;
+            quoteCategory.textContent = `— Category: ${last.category || ''} (restored from session)`;
+            setMessage('Restored last quote from session storage.', 'success');
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    /*************
+     * Event listeners
+     *************/
+    showQuoteBtn.addEventListener("click", () => {
+      setMessage(''); // clear previous message
+      showRandomQuote();
+    });
+
+    addQuoteBtn.addEventListener("click", () => {
+      setMessage('');
+      createAddQuoteForm();
+    });
+
+    exportBtn.addEventListener("click", () => {
+      setMessage('');
+      exportToJsonFile();
+    });
+
+    importFileInput.addEventListener("change", (ev) => {
+      setMessage('');
+      const f = ev.target.files && ev.target.files[0];
+      if (f) importFromJsonFile(f);
+    });
+
+    // initialize app
+    init();
+  </script>
+</body>
+</html>
+
 
 
 
