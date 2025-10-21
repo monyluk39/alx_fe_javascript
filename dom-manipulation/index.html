@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Quote Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Dynamic Quote Generator</h1>
+            <p class="subtitle">Find inspiration in words of wisdom. Filter by category to find the perfect quote.</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="filter-section">
+                    <h2>Filter Quotes</h2>
+                    <select id="categoryFilter">
+                        <option value="all">All Categories</option>
+                        <!-- Categories will be populated dynamically -->
+                    </select>
+                </div>
+                
+                <div class="add-quote-section">
+                    <h2>Add New Quote</h2>
+                    <form id="addQuoteForm">
+                        <div class="form-group">
+                            <label for="quoteText">Quote Text</label>
+                            <textarea id="quoteText" placeholder="Enter the quote text here..." required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="quoteAuthor">Author</label>
+                            <input type="text" id="quoteAuthor" placeholder="Enter author name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="quoteCategory">Category</label>
+                            <select id="quoteCategory">
+                                <!-- Categories will be populated dynamically -->
+                            </select>
+                        </div>
+                        <button type="submit">Add Quote</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="quotes-section">
+                <div class="quote-counter">
+                    <span id="quoteCount">0 quotes displayed</span>
+                </div>
+                
+                <div class="quotes-container" id="quotesContainer">
+                    <!-- Quotes will be displayed here dynamically -->
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Dynamic Quote Generator &copy; 2023 | All quotes are stored locally in your browser</p>
+        </footer>
+    </div>
+    
+    <div class="notification" id="notification">
+        Quote added successfully!
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
