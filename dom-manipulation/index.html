@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Quote Generator with Storage</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Dynamic Quote Generator</h1>
+        <p class="subtitle">Store, manage, and share your favorite quotes</p>
+        
+        <div class="quote-display">
+            <p class="quote-text" id="quoteText">Click "Generate Quote" to get started!</p>
+            <p class="quote-author" id="quoteAuthor"></p>
+        </div>
+        
+        <div class="controls">
+            <button id="generateBtn">
+                <span>Generate Quote</span>
+            </button>
+            <button id="exportBtn" class="secondary-btn">
+                <span>Export Quotes</span>
+            </button>
+        </div>
+        
+        <div class="file-input-container">
+            <label for="importFile" class="file-input-label">Import Quotes from JSON</label>
+            <input type="file" id="importFile" accept=".json">
+        </div>
+        
+        <div class="add-quote-form">
+            <h3>Add Your Own Quote</h3>
+            <div class="form-group">
+                <label for="quoteInput">Quote Text</label>
+                <textarea id="quoteInput" placeholder="Enter your quote here..."></textarea>
+            </div>
+            <div class="form-group">
+                <label for="authorInput">Author</label>
+                <input type="text" id="authorInput" placeholder="Enter author name...">
+            </div>
+            <button id="addQuoteBtn" class="secondary-btn">Add Quote</button>
+        </div>
+        
+        <div class="storage-info">
+            <div id="localStorageInfo">Local Storage: Loading...</div>
+            <div id="sessionStorageInfo">Session Storage: Loading...</div>
+        </div>
+        
+        <div id="statusMessage" class="status-message"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
