@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dynamic Quote Generator — Web Storage & JSON Import/Export</title>
+  <style>
+    :root{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    body{max-width:980px;margin:32px auto;padding:20px;background:#f7f8fb;color:#111}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:1.25rem;margin:0}
+    .card{background:white;border-radius:12px;box-shadow:0 6px 18px rgba(18,24,40,0.06);padding:18px;margin-bottom:16px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    input[type=text]{flex:1;padding:10px;border-radius:8px;border:1px solid #e3e6ee}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#2b6ef6;color:white;cursor:pointer}
+    button.secondary{background:#6b7280}
+    .quote{font-style:italic;padding:12px;border-left:4px solid #e8eefc;background:#fbfdff;border-radius:6px}
+    ul{list-style:none;padding:0;margin:12px 0}
+    li{display:flex;justify-content:space-between;padding:8px 6px;border-bottom:1px dashed #eef2ff}
+    .meta{font-size:0.9rem;color:#374151}
+    .small{font-size:0.85rem;color:#6b7280}
+    label.file-label{display:inline-block;padding:8px 12px;background:#111827;color:white;border-radius:8px;cursor:pointer}
+    input[type=file]{display:none}
+    .actions{display:flex;gap:8px}
+    .notice{font-size:0.92rem;color:#065f46;padding:8px 0}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dynamic Quote Generator — Web Storage & JSON</h1>
+    <div class="small">LocalStorage • SessionStorage • Import/Export</div>
+  </header>
+
+  <section class="card" id="generator">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input id="quoteInput" type="text" placeholder="Add a new quote (author optional, e.g. 'Quote — Author')">
+      <button id="addBtn">Add</button>
+      <button id="randomBtn" class="secondary">Random</button>
+    </div>
+    <div class="actions" style="align-items:center;">
+      <button id="exportBtn">Export JSON</button>
+      <label class="file-label" for="importFile">Import JSON</label>
+      <input type="file" id="importFile" accept=".json" />
+      <button id="clearAll" class="secondary">Clear All</button>
+    </div>
+    <p class="small" style="margin-top:10px">Tip: Imported JSON should be an array of strings or objects like {"text":"...","author":"..."}.</p>
+  </section>
+
+  <section class="card">
+    <div>
+      <div id="currentQuote" class="quote small">No quote selected yet.</div>
+      <div class="notice" id="statusMsg" style="display:none"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3 style="margin-top:0">Saved Quotes</h3>
+    <ul id="quotesList"></ul>
+  </section>
+
+  <script>
+    // ---------- Storage keys ----------
+    const LS_KEY = 'dqg_quotes_v1';       // localStorage key for persistent quotes
+    const SS_KEY_LAST = 'dqg_last_viewed'; // sessionStorage key for last viewed quote index
+
+    // ---------- App state ----------
+    let quotes = []; // array of {text, author}
+
+    // ---------- Helpers ----------
+    function normalizeEntry(item){
+      // Accepts string or object and returns {text,author}
+      if(typeof item === 'string'){
+        const parts = item.split('—'); // em dash or ' - ' could be used by users
+        if(parts.length >= 2){
+          return {text: parts[0].trim(), author: parts.slice(1).join('—').trim()};
+        }
+        return {text: item.trim(), author: ''};
+      }
+      if(item && typeof item === 'object'){
+        return {text: String(item.text || item.quote || item.q || '').trim(), author: String(item.author || item.by || '').trim()};
+      }
+      return null;
+    }
+
+    function saveQuotes(){
+      try{
+        localStorage.setItem(LS_KEY, JSON.stringify(quotes));
+        showStatus('Saved to localStorage.');
+      }catch(e){
+        showStatus('Failed to save to localStorage: ' + e.message, true);
+      }
+    }
+
+    function loadQuotes(){
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return false;
+      try{
+        const parsed = JSON.parse(raw);
+        if(Array.isArray(parsed)){
+          quotes = parsed.map(normalizeEntry).filter(Boolean);
+          return true;
+        }
+      }catch(e){
+        console.warn('Failed to parse localStorage content', e);
+      }
+      return false;
+    }
+
+    function showStatus(msg, isError=false){
+      const el = document.getElementById('statusMsg');
+      el.style.display = 'block';
+      el.style.color = isError ? '#b91c1c' : '#065f46';
+      el.textContent = msg;
+      setTimeout(()=>{ el.style.display = 'none'; }, 3000);
+    }
+
+    function renderQuotes(){
+      const ul = document.getElementById('quotesList');
+      ul.innerHTML = '';
+      quotes.forEach((q, i) =>{
+        const li = document.createElement('li');
+        const left = document.createElement('div');
+        left.innerHTML = `<div style=\"font-weight:600\">${escapeHtml(q.text)}</div><div class=\"meta\">${escapeHtml(q.author)}</div>`;
+        const right = document.createElement('div');
+        right.style.display='flex'; right.style.gap='8px';
+        const viewBtn = document.createElement('button'); viewBtn.textContent='View'; viewBtn.onclick = ()=>viewQuote(i);
+        const delBtn = document.createElement('button'); delBtn.textContent='Delete'; delBtn.className='secondary'; delBtn.onclick = ()=>deleteQuote(i);
+        right.appendChild(viewBtn); right.appendChild(delBtn);
+        li.appendChild(left); li.appendChild(right);
+        ul.appendChild(li);
+      });
+    }
+
+    function escapeHtml(text){
+      return String(text || '').replace(/[&<>\"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]; });
+    }
+
+    function viewQuote(index){
+      const q = quotes[index];
+      if(!q) return;
+      const el = document.getElementById('currentQuote');
+      el.textContent = q.text + (q.author ? ' — ' + q.author : '');
+      // Save last viewed index in sessionStorage (session-only)
+      try{ sessionStorage.setItem(SS_KEY_LAST, String(index)); }catch(e){}
+      showStatus('Displayed quote.');
+    }
+
+    function deleteQuote(index){
+      if(index < 0 || index >= quotes.length) return;
+      quotes.splice(index,1);
+      saveQuotes(); renderQuotes();
+      showStatus('Quote deleted.');
+    }
+
+    function addQuoteFromInput(){
+      const input = document.getElementById('quoteInput');
+      const raw = input.value.trim();
+      if(!raw) { showStatus('Please enter a quote first.', true); return; }
+      const entry = normalizeEntry(raw);
+      if(!entry || !entry.text) { showStatus('Quote seems invalid.', true); return; }
+      // avoid exact duplicates
+      const exists = quotes.some(q => q.text === entry.text && q.author === entry.author);
+      if(exists){ showStatus('This quote already exists.', true); input.value=''; return; }
+      quotes.push(entry);
+      input.value='';
+      saveQuotes(); renderQuotes();
+      showStatus('Quote added.');
+    }
+
+    function pickRandom(){
+      if(quotes.length === 0){ showStatus('No quotes available. Add some first.', true); return; }
+      const idx = Math.floor(Math.random()*quotes.length);
+      viewQuote(idx);
+    }
+
+    // ---------- Import/Export ----------
+    function exportToJson(){
+      const data = JSON.stringify(quotes, null, 2);
+      const blob = new Blob([data], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'quotes.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showStatus('Export started.');
+    }
+
+    function importFromJsonFile(file){
+      if(!file){ showStatus('No file selected.', true); return; }
+      const reader = new FileReader();
+      reader.onload = function(ev){
+        try{
+          const imported = JSON.parse(ev.target.result);
+          if(!Array.isArray(imported)) throw new Error('JSON must be an array of quotes.');
+          const normalized = imported.map(normalizeEntry).filter(Boolean);
+          // Merge but avoid duplicates by text+author
+          const before = quotes.length;
+          normalized.forEach(nq =>{
+            if(!quotes.some(q=>q.text===nq.text && q.author===nq.author)) quotes.push(nq);
+          });
+          saveQuotes(); renderQuotes();
+          showStatus(`Imported ${quotes.length - before} quotes.`);
+        }catch(e){
+          console.error(e);
+          showStatus('Failed to import: ' + e.message, true);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // ---------- Initialization ----------
+    function init(){
+      // load quotes from localStorage, or use defaults
+      const loaded = loadQuotes();
+      if(!loaded){
+        // sample starter quotes
+        quotes = [
+          {text:'The only limit to our realization of tomorrow is our doubts of today.', author:'Franklin D. Roosevelt'},
+          {text:'Life is what happens when you\'re busy making other plans.', author:'John Lennon'},
+          {text:'Do not go where the path may lead, go instead where there is no path and leave a trail.', author:'Ralph Waldo Emerson'}
+        ];
+        saveQuotes();
+      }
+      renderQuotes();
+
+      // if session storage has last viewed index, show it
+      try{
+        const last = sessionStorage.getItem(SS_KEY_LAST);
+        if(last !== null){ const idx = Number(last); if(Number.isFinite(idx) && quotes[idx]) viewQuote(idx); }
+      }catch(e){}
+
+      // wire up UI
+      document.getElementById('addBtn').addEventListener('click', addQuoteFromInput);
+      document.getElementById('randomBtn').addEventListener('click', pickRandom);
+      document.getElementById('exportBtn').addEventListener('click', exportToJson);
+      document.getElementById('importFile').addEventListener('change', function(e){ importFromJsonFile(e.target.files[0]); e.target.value=''; });
+      document.getElementById('clearAll').addEventListener('click', ()=>{
+        if(!confirm('Clear all quotes from this browser? This will remove saved quotes from localStorage.')) return;
+        quotes = [];
+        saveQuotes(); renderQuotes();
+        document.getElementById('currentQuote').textContent='No quote selected yet.';
+      });
+
+      // keyboard: Enter to add
+      document.getElementById('quoteInput').addEventListener('keyup', (e)=>{ if(e.key === 'Enter') addQuoteFromInput(); });
+    }
+
+    // Run
+    init();
+  </script>
+</body>
+</html>
+
+
